@@ -36,6 +36,7 @@ When shipping you can hardcode this instead.
 Linux specific instructions:
 
 If you want it to run as a daemon, create a /etc/systemd/system/nodetunnel.service
+
 Also, fill in the NODETUNNEL_MASTER_KEY with the master key generated when running the secure nodetunnel the first time.
 
 ```
