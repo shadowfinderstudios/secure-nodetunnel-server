@@ -26,7 +26,7 @@ When shipping you can hardcode this instead.
 ### Setup
 **This varies a lot depending on your setup.**
 1. Setup .NET on your server, this varies depending on your setup. See: https://learn.microsoft.com/en-us/dotnet/core/install/
-2. Open ports 9999 for UDP and 9998 for TCP for both incoming and outgoing traffic
+2. Open ports 9999 for UDP and 9998 for TCP for both incoming and outgoing traffic, and also 8099 TCP for the StatusServer
 3. Clone this repository
 4. Build & run the server
    ```dotnet run --configuration Release```
