@@ -103,4 +103,8 @@ And, now notice that the packets are unreadable in the encrypted capture and hum
 
 This code is released under the MIT license.
 
+Disclaimer of Liability and Security
+
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. This includes, but is not limited to, any and all security vulnerabilities, data breaches, or safety issues arising from the use of the nodetunnel project for multiplayer in Godot. You assume all risk associated with the security, reliability, and safety of your application using this project.
+
 This software includes cryptographic features. Users are responsible for complying with all applicable U.S. export control laws and regulations, including the U.S. Export Administration Regulations (EAR). Specifically, this software may not be exported or re-exported to any country or entity to which the U.S. has embargoed goods.
