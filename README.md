@@ -7,10 +7,7 @@ This is the source code for the NodeTunnel relay server. Based on:
 https://github.com/curtjs/nodetunnel
 https://github.com/curtjs/nodetunnel-server/
 
-Shadowfinder Studios submitted the secure version of this codebase in 2025 under the MIT license.
-It supports authentication tokens, encryption, rate limiting and banning with a time limit.
-
-It supports searchable Lobbies. Also, there is now an improved Godot demo project in SecureNodeTunnelExample.
+It supports authentication tokens, encryption, rate limiting and banning with a time limit. It supports searchable Lobbies. Also, there is now an improved Godot demo project in SecureNodeTunnelExample.
 
 The new Lobby Schema design allows the developer to establish a message contract in the expected parameters
 that lobbies will communicate via the lobby registration and search system. This dictionary of parameters
