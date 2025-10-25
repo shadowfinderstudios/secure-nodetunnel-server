@@ -1,7 +1,9 @@
 # secure-nodetunnel-server
 A secure encrypted version of nodetunnel-server for Godot.
 
-This is the source code for the NodeTunnel relay server.
+This is the source code for the NodeTunnel relay server. Based on:
+https://github.com/curtjs/nodetunnel
+https://github.com/curtjs/nodetunnel-server/
 
 Shadowfinder Studios submitted the secure version of this codebase in 2025 under the MIT license.
 It now supports authentication tokens, encryption, rate limiting and banning with a time limit.
