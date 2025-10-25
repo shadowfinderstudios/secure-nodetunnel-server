@@ -12,6 +12,11 @@ It supports authentication tokens, encryption, rate limiting and banning with a 
 
 It supports searchable Lobbies. Also, there is now an improved Godot demo project in SecureNodeTunnelExample.
 
+The new Lobby Schema design allows the developer to establish a message contract in the expected parameters
+that lobbies will communicate via the lobby registration and search system. This dictionary of parameters
+must match on both the server and on the client. And, are present in the HTTP/LobbySchema.cs on the server,
+and in SecureNodeTunnelExample/addons/nodetunnel/LobbyMetadata.gd in the client plugin. These MUST match.
+
 In the addons folder is the secure version of the addons plugin for Godot.
 In nodetunnel addon make certain to edit the internal/_PacketEncryption.gd and set the variable MASTER_KEY.
 Use the NODETUNNEL_MASTER_KEY environment variable while testing so the key doesn't end up in your repo.
