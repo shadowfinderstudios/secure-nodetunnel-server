@@ -11,6 +11,7 @@ namespace NodeTunnel.TCP;
 
 public class SecureTCPHandler {
     public event Action<string>? PeerDisconnected;
+    public event Action<string>? RoomClosed;
     
     private TcpListener _tcp = null!;
     private CancellationTokenSource _ct = null!;
@@ -20,7 +21,7 @@ public class SecureTCPHandler {
     private readonly ConcurrentDictionary<TcpClient, string> _tcpToOid = new();
     
     private readonly SecurityLayer _security;
-    
+
     public SecureTCPHandler(SecurityLayer security) {
         _security = security;
     }
@@ -99,17 +100,18 @@ public class SecureTCPHandler {
             Console.WriteLine($"TCP Client Error: {ex.Message}");
         }
         finally {
+            await DisconnectClient(client);
             _security.Connections.RemoveConnection(clientIp);
             client.Close();
         }
     }
 
     private async Task DisconnectClient(TcpClient client) {
-        if (!_tcpToOid.TryGetValue(client, out var oid)) return;
+	    if (!_tcpToOid.TryGetValue(client, out var oid)) return;
         
         Console.WriteLine($"Disconnecting: {oid}");
 
-        await HandleLeaveRoom(client);
+    	await HandleLeaveRoom(client);
         PeerDisconnected?.Invoke(oid);
         
         var clientIp = ((IPEndPoint)client.Client.RemoteEndPoint!).Address;
@@ -198,6 +200,7 @@ public class SecureTCPHandler {
         
         var room = new Room(oid, client);
         _rooms[oid] = room;
+	    _oidToRid[oid] = oid;
         
         Console.WriteLine($"Created Room For Peer: {oid}");
 
@@ -223,6 +226,8 @@ public class SecureTCPHandler {
 
         if (_rooms.TryGetValue(hostOid, out var room)) {
             room.AddPeer(oid, client);
+	        _tcpToOid[client] = oid;
+	        _oidToRid[oid] = hostOid;
         }
         else {
             return;
@@ -244,14 +249,19 @@ public class SecureTCPHandler {
         if (room.Id == oid) {
             Console.WriteLine($"Host {oid} disconnecting, closing room");
 
-            foreach (var tcpClient in room.Clients.Values) {
+            foreach (var (peerOid, tcpClient) in room.Clients) {
                 await SendLeaveRoom(tcpClient);
+		        _oidToRid.TryRemove(peerOid, out _);
             }
             
+	        _oidToRid.TryRemove(oid, out _);
             _rooms.TryRemove(room.Id, out _);
+
+	        RoomClosed?.Invoke(oid);
         }
         else {
             room.RemovePeer(oid);
+	        _oidToRid.TryRemove(oid, out _);
             _ = Task.Run(() => SendPeerList(room));
             _ = Task.Run(() => SendLeaveRoom(client));
         }
@@ -284,7 +294,8 @@ public class SecureTCPHandler {
         var msg = new List<byte>();
         msg.AddRange(ByteUtils.PackU32((uint)PacketType.LeaveRoom));
 
-        await SendTcpMessage(client, msg.ToArray());
+	if (client.Connected)
+	        await SendTcpMessage(client, msg.ToArray());
     }
 
     public Room? GetRoomForPeer(string oid) {
@@ -310,4 +321,8 @@ public class SecureTCPHandler {
 
     public int GetTotalRooms() => _rooms.Count;
     public int GetTotalPeers() => _rooms.Values.Sum(room => room.GetPeers().Count);
+
+    public List<(string roomId, int peerCount)> GetRoomDetails() {
+        return _rooms.Values.Select(room => (room.Id, room.GetPeers().Count)).ToList();
+    }
 }

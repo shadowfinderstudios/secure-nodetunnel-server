@@ -49,7 +49,7 @@ func connect_to_relay(host: String, port: int, oid: String):
 	
 	var res = socket.connect_to_host(relay_host, port)
 	if res != OK:
-		NodeTunnelPeer._log_error("Failed to connect to UDP socket: " + str(res))
+		push_error("[NodeTunnel] Failed to connect to UDP socket: " + str(res))
 
 func send_connect():
 	send_packet("SERVER", "UDP_CONNECT".to_utf8_buffer())

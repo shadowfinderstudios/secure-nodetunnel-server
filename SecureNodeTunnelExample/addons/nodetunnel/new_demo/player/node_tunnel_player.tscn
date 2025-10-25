@@ -1,0 +1,48 @@
+[gd_scene load_steps=5 format=3 uid="uid://djvqmlk3ur5qc"]
+
+[ext_resource type="Script" uid="uid://3vaeed82f4uf" path="res://addons/nodetunnel/new_demo/player/node_tunnel_player.gd" id="1_prygx"]
+[ext_resource type="Texture2D" uid="uid://cpot73lt2bs0o" path="res://addons/nodetunnel/new_demo/assets/soldier1_gun.png" id="2_ndil1"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_8ffj4"]
+radius = 22.0227
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_xqasv"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 8
+collision_mask = 8
+script = ExtResource("1_prygx")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_ndil1")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(-5, 0)
+shape = SubResource("CircleShape2D_8ffj4")
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(28, 8)
+
+[node name="BasicPlayer" type="Node2D" parent="."]
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_interval = 0.033
+delta_interval = 0.2
+replication_config = SubResource("SceneReplicationConfig_xqasv")
+visibility_update_mode = 1
+
+[node name="Label_Respawn" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+top_level = true
+offset_right = 40.0
+offset_bottom = 50.0
+theme_override_font_sizes/font_size = 36
+text = "0"
+horizontal_alignment = 1

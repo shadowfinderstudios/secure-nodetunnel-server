@@ -18,13 +18,18 @@ func _init(enabled: bool = true):
 		_initialize_key()
 
 func _initialize_key() -> void:
-	var newkey: String = OS.get_environment("NODETUNNEL_MASTER_KEY")
-	if newkey: MASTER_KEY = newkey
-	
 	if MASTER_KEY == "REPLACE_WITH_YOUR_MASTER_KEY_FROM_SERVER":
-		push_error("PacketEncryption: Master key not set! Please update MASTER_KEY constant.")
-		_enabled = false
-		return
+		## For testing we retrieve the master key from the environment.
+		## When you ship your game bake this in and remove this line.
+		var newkey: String = OS.get_environment("NODETUNNEL_MASTER_KEY")
+		if newkey:
+			MASTER_KEY = newkey
+			print("*** MASTER_KEY retrieved from registry for TESTING PURPOSES!")
+			print("*** When you ship your game bake in the key and remove the env load line in _PacketEncryption.gd.")
+		else:
+			push_error("PacketEncryption: Master key not set! Please update MASTER_KEY constant.")
+			_enabled = false
+			return
 	
 	_key = Marshalls.base64_to_raw(MASTER_KEY)
 	

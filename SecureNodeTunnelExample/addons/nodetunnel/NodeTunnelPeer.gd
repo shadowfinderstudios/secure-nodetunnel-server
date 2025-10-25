@@ -20,10 +20,14 @@ enum ConnectionState {
 ## [br]
 ## [br][param online_id] The online ID from NodeTunnel
 signal relay_connected(online_id: String)
+
 ## Fires when [member host] succeeds.
 signal hosting
+
 ## Fires when [member join] succeeds.
+
 signal joined
+
 ## Fires when this peer leaves a room
 ## Also fires when the room host leaves and kicks this peer from the room
 signal room_left
@@ -33,6 +37,26 @@ var relay_host: String
 var relay_port: int
 var online_id: String = ""
 var connection_state: ConnectionState = ConnectionState.DISCONNECTED
+
+# Lobby registration configuration
+var registry_url: String = ""
+var lobby_metadata: Dictionary = {}
+var _registration_enabled: bool = false
+var _registration_timer: Timer = null
+var _registration_http: HTTPRequest = null
+var _registration_interval: float = 30.0
+var _registration_parent_node: Node = null
+
+
+var lobby_registration_interval: float = 30.0:
+	set(value):
+		_registration_interval = clamp(value, 5.0, 300.0)
+		if _registration_timer != null:
+			_registration_timer.wait_time = _registration_interval
+		_log("Lobby registration interval set to: " + str(_registration_interval) + "s")
+	get:
+		return _registration_interval
+
 
 # Multiplayer peer state
 var unique_id: int = 0
@@ -62,6 +86,7 @@ var _udp_packet_buffer: Array = []
 # Debug configuration
 static var debug_enabled: bool = false
 
+
 ## Packet data container for multiplayer system
 class PacketData:
 	var data: PackedByteArray
@@ -74,6 +99,7 @@ class PacketData:
 		from_peer = p_from
 		channel = p_channel
 		mode = p_mode
+
 
 func _init():
 	_encryption = PacketEncryption.new(encryption_enabled)
@@ -99,25 +125,44 @@ func set_encryption_enabled(enabled: bool) -> void:
 	encryption_enabled = enabled
 	if _encryption != null:
 		_encryption.set_enabled(enabled)
-	
+
 	if enabled:
 		_log("Encryption enabled")
 	else:
-		_log_warning("Encryption disabled - not recommended for production!")
+		push_warning("[NodeTunnel] Encryption disabled - not recommended for production!")
 
-## Connect to a NodeTunnel relay server
-## [br]
-## [br][param host]: The relay server hostname or IP address
-## [br][param port]: The TCP port for the relay server (typically 9998)
+func enable_lobby_registration(parent_node: Node, url: String, metadata: Dictionary) -> void:
+	if parent_node == null:
+		push_error("[NodeTunnel] parent_node cannot be null for lobby registration")
+		return
+
+	var validation = LobbyMetadata.validate(metadata)
+	if not validation.is_valid:
+		push_error("[NodeTunnel] Lobby metadata validation failed: " + validation.error_message)
+		return
+
+	_registration_parent_node = parent_node
+	registry_url = url
+	lobby_metadata = metadata.duplicate()
+	_registration_enabled = true
+
+	var lobby_name = metadata.get("Name", "Unknown")
+	_log("Lobby registration enabled: " + lobby_name)
+
+func disable_lobby_registration() -> void:
+	_registration_enabled = false
+	_stop_lobby_registration()
+	_log("Lobby registration disabled")
+
 func connect_to_relay(node_tunnel_address: String, node_tunnel_port: int) -> void:
 	if connection_state != ConnectionState.DISCONNECTED:
-		_log_warning("Already connected or connecting to relay")
+		push_warning("[NodeTunnel] Already connected or connecting to relay")
 		return
 	
 	if _encryption.is_enabled():
 		_log("Connecting with encryption enabled")
 	else:
-		_log_warning("Connecting with encryption DISABLED")
+		push_warning("[NodeTunnel] Connecting with encryption DISABLED")
 	
 	connection_state = ConnectionState.CONNECTING
 	connection_status = MultiplayerPeer.CONNECTION_CONNECTING
@@ -138,38 +183,40 @@ func connect_to_relay(node_tunnel_address: String, node_tunnel_port: int) -> voi
 	_log("Connected to relay with OID: " + online_id)
 	relay_connected.emit(online_id)
 
-## Start hosting a multiplayer session
+
 func host() -> void:
 	if connection_state != ConnectionState.CONNECTED:
-		_log_error("Must be connected to relay before hosting")
+		push_error("[NodeTunnel] Must be connected to relay before hosting")
 		return
-	
+
 	if !_udp_handler.connected:
 		_log("Sending UDP Connect Request")
 		_udp_handler.send_connect()
 		await _udp_handler.udp_connected
 	_log("UDP Connected")
-	
+
 	_log("Sending TCP Host Request")
 	_packet_manager.send_host(_tcp_handler.tcp, online_id)
 	await _packet_manager.peer_list_res
 	_log("Peer List Received")
-	
+
 	connection_state = ConnectionState.HOSTING
 	connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_log("Started hosting session")
+
+	if _registration_enabled:
+		_start_lobby_registration()
+
 	hosting.emit()
 
-## Join a multiplayer session using the host's online ID
-## [br]
-## [br][param host_oid]: The online ID of the hosting peer
+
 func join(host_oid: String) -> void:
 	if connection_state != ConnectionState.CONNECTED:
-		_log_error("Must be connected to relay before joining")
+		push_error("[NodeTunnel] Must be connected to relay before joining")
 		return
 	
 	if host_oid.is_empty():
-		_log_error("Host OID cannot be empty")
+		push_error("[NodeTunnel] Host OID cannot be empty")
 		return
 	
 	_udp_handler.send_connect()
@@ -183,14 +230,19 @@ func join(host_oid: String) -> void:
 	_log("Joined session with host: " + host_oid)
 	joined.emit()
 
+
 func leave_room() -> void:
 	if connection_state != ConnectionState.JOINED && connection_state != ConnectionState.HOSTING:
-		_log_error("Must be in a room before attempting to leave!")
+		push_error("[NodeTunnel] Must be in a room before attempting to leave!")
 		return
-	
+
 	_peer_leaving_room = true
-	
+
+	if connection_state == ConnectionState.HOSTING:
+		_stop_lobby_registration()
+
 	_packet_manager.send_leave_room(_tcp_handler.tcp)
+
 
 ## Disconnect from the relay server and clean up all connections
 func disconnect_from_relay() -> void:
@@ -268,10 +320,14 @@ func _handle_peer_list(numeric_to_online_id: Dictionary[int, String]) -> void:
 	
 	_log("Updated peer list: " + str(connected_peers))
 
+## WARNING: Internal NodeTunnel Code
+## [b]Do not call this method directly![/b]
 func _handle_leave_room() -> void:
 	for p in connected_peers:
 		peer_disconnected.emit(p)
-	
+
+	_stop_lobby_registration()
+
 	connection_state = ConnectionState.CONNECTED
 	connection_status = MultiplayerPeer.CONNECTION_CONNECTING
 	connected_peers.clear()
@@ -280,8 +336,118 @@ func _handle_leave_room() -> void:
 	_numeric_to_online_id.clear()
 	unique_id = 0
 	_peer_list_ready = false
-	
+
 	room_left.emit()
+
+# ============================================================================
+# LOBBY REGISTRATION METHODS
+# ============================================================================
+
+## WARNING: Internal NodeTunnel Code
+## [b]Do not call this method directly![/b]
+func _start_lobby_registration() -> void:
+	if registry_url.is_empty():
+		push_error("[NodeTunnel] Cannot start lobby registration: registry_url is empty")
+		return
+
+	if lobby_metadata.is_empty():
+		push_error("[NodeTunnel] Cannot start lobby registration: lobby_metadata is empty")
+		return
+
+	if _registration_parent_node == null:
+		push_error("[NodeTunnel] Cannot start lobby registration: parent node is null")
+		return
+
+	_log("Starting automatic lobby registration")
+
+	if _registration_timer == null:
+		_registration_timer = Timer.new()
+		_registration_timer.wait_time = _registration_interval
+		_registration_timer.timeout.connect(_register_lobby)
+		_registration_parent_node.add_child(_registration_timer)
+
+	_register_lobby()
+
+	_registration_timer.start()
+
+## WARNING: Internal NodeTunnel Code
+## [b]Do not call this method directly![/b]
+func _stop_lobby_registration() -> void:
+	if _registration_timer != null && _registration_timer.timeout.is_connected(_register_lobby):
+		_registration_timer.stop()
+		_log("Stopped automatic lobby registration")
+
+	if _registration_http != null && is_instance_valid(_registration_http):
+		_registration_http.queue_free()
+		_registration_http = null
+
+## WARNING: Internal NodeTunnel Code
+## [b]Do not call this method directly![/b]
+func _register_lobby() -> void:
+	if !_is_server():
+		return
+
+	if registry_url.is_empty():
+		return
+
+	if lobby_metadata.is_empty():
+		return
+
+	if _registration_parent_node == null:
+		return
+
+	if _registration_http != null && is_instance_valid(_registration_http):
+		_registration_http.queue_free()
+
+	var lobby_data = lobby_metadata.duplicate()
+	lobby_data["LobbyId"] = online_id
+	lobby_data["CurrentPlayers"] = connected_peers.size()
+
+	_registration_http = HTTPRequest.new()
+	_registration_parent_node.add_child(_registration_http)
+	_registration_http.request_completed.connect(_on_registration_complete)
+
+	var json = JSON.stringify(lobby_data)
+	var headers = ["Content-Type: application/json"]
+
+	var error = _registration_http.request(registry_url + "/register-lobby", headers, HTTPClient.METHOD_POST, json)
+	if error != OK:
+		push_error("[NodeTunnel] Failed to send lobby registration request: " + str(error))
+		_registration_http.queue_free()
+		_registration_http = null
+
+## WARNING: Internal NodeTunnel Code
+## [b]Do not call this method directly![/b]
+func _on_registration_complete(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
+	if _registration_http != null && is_instance_valid(_registration_http):
+		_registration_http.queue_free()
+		_registration_http = null
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		var error_names = {
+			HTTPRequest.RESULT_CHUNKED_BODY_SIZE_MISMATCH: "CHUNKED_BODY_SIZE_MISMATCH",
+			HTTPRequest.RESULT_CANT_CONNECT: "CANT_CONNECT",
+			HTTPRequest.RESULT_CANT_RESOLVE: "CANT_RESOLVE",
+			HTTPRequest.RESULT_CONNECTION_ERROR: "CONNECTION_ERROR",
+			HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR: "TLS_HANDSHAKE_ERROR",
+			HTTPRequest.RESULT_NO_RESPONSE: "NO_RESPONSE",
+			HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED: "BODY_SIZE_LIMIT_EXCEEDED",
+			HTTPRequest.RESULT_REQUEST_FAILED: "REQUEST_FAILED",
+			HTTPRequest.RESULT_DOWNLOAD_FILE_CANT_OPEN: "DOWNLOAD_FILE_CANT_OPEN",
+			HTTPRequest.RESULT_DOWNLOAD_FILE_WRITE_ERROR: "DOWNLOAD_FILE_WRITE_ERROR",
+			HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED: "REDIRECT_LIMIT_REACHED",
+			HTTPRequest.RESULT_TIMEOUT: "TIMEOUT"
+		}
+		var error_name = error_names.get(result, "UNKNOWN")
+		push_warning("[NodeTunnel] Lobby registration failed: " + error_name + " (code " + str(result) + ")")
+		return
+
+	if response_code != 200:
+		var body_text = body.get_string_from_utf8()
+		push_warning("[NodeTunnel] Lobby registration failed: Server error " + str(response_code) + " - " + body_text)
+		return
+
+	_log("Lobby registered successfully")
 
 # ============================================================================
 # UTILITY METHODS
@@ -312,17 +478,6 @@ func _reset_connection() -> void:
 static func _log(message: String) -> void:
 	if debug_enabled:
 		print("[NodeTunnel] " + message)
-
-## WARNING: Internal NodeTunnel Code
-## [b]Do not call this method directly![/b]
-static func _log_warning(message: String) -> void:
-	if debug_enabled:
-		push_warning("[NodeTunnel] " + message)
-
-## WARNING: Internal NodeTunnel Code
-## [b]Do not call this method directly![/b]
-static func _log_error(message: String) -> void:
-	push_error("[NodeTunnel] " + message)
 
 # ============================================================================
 # MULTIPLAYER PEER EXTENSION IMPLEMENTATION

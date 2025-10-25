@@ -1,12 +1,16 @@
 # secure-nodetunnel-server
 A secure encrypted version of nodetunnel-server for Godot.
 
+![Secure-Nodetunnel](secure_nt_logo.png?raw=true "Secure Nodetunnel for Godot")
+
 This is the source code for the NodeTunnel relay server. Based on:
 https://github.com/curtjs/nodetunnel
 https://github.com/curtjs/nodetunnel-server/
 
 Shadowfinder Studios submitted the secure version of this codebase in 2025 under the MIT license.
-It now supports authentication tokens, encryption, rate limiting and banning with a time limit.
+It supports authentication tokens, encryption, rate limiting and banning with a time limit.
+
+It supports searchable Lobbies. Also, there is now an improved Godot demo project in SecureNodeTunnelExample.
 
 In the addons folder is the secure version of the addons plugin for Godot.
 In nodetunnel addon make certain to edit the internal/_PacketEncryption.gd and set the variable MASTER_KEY.
